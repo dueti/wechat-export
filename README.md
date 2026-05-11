@@ -31,7 +31,7 @@ brew install sqlcipher ffmpeg
 
 ```bash
 # 克隆到 Claude Code skills 目录
-git clone https://github.com/duetzk/wechat-export.git ~/.claude/skills/wechat-export
+git clone https://github.com/dueti/wechat-export.git ~/.claude/skills/wechat-export
 ```
 
 ## 使用
