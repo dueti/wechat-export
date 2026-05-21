@@ -26,10 +26,13 @@ allowed-tools: Bash Read Write Edit Glob Grep
 ### 第 1 步：导出消息
 
 ```bash
-wechat-cli export "$chat_name" --format markdown --start-time "2026-01-01" --limit 10000 --output /tmp/wechat_export_raw.md
+# 计算 3 个月前的日期作为默认起始时间
+START_DATE=$(python3 -c "from datetime import datetime,timedelta; print((datetime.now()-timedelta(days=90)).strftime('%Y-%m-%d'))")
+wechat-cli export "$chat_name" --format markdown --start-time "$START_DATE" --limit 10000 --output /tmp/wechat_export_raw.md
 ```
 
 如果用户指定了时间范围，替换 `--start-time` 和添加 `--end-time`。
+如果用户说"全部"或"所有"，用 `--start-time "2020-01-01"` 覆盖全量。
 如果用户没指定时间，默认最近 3 个月。
 
 ### 第 2 步：获取群聊 username
@@ -108,7 +111,7 @@ aes_key = MD5(str(uin) + wxid)[:16]
 xor_key = uin & 0xFF
 ```
 
-用 `~/.claude/skills/wechat-export/find_image_key.py` 自动推导。
+`export_images.py` 中的 `find_image_keys()` 自动推导，无需手动配置。
 
 ### 微信数据路径
 

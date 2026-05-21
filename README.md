@@ -1,6 +1,6 @@
 # wechat-export
 
-Claude Code skill：导出 Mac 微信聊天记录到 Obsidian，含图片解密和排版。
+Claude Code skill：导出 **Mac 微信** 聊天记录到 Obsidian，含图片解密和排版。仅支持 macOS。
 
 ## 功能
 
@@ -44,11 +44,19 @@ git clone https://github.com/dueti/wechat-export.git ~/.claude/skills/wechat-exp
 
 或者直接说"导出微信群聊 XXX 到 Obsidian"，skill 会自动触发。
 
+### 检查环境
+
+```bash
+python3 export_images.py --check --input /dev/null --username x --output /dev/null
+```
+
+会检测 wechat-cli、ffmpeg、pycryptodome、密钥文件、微信数据目录是否就绪。
+
 ### 手动使用脚本
 
 ```bash
-# 1. 导出消息
-wechat-cli export "群聊名" --format markdown --start-time "2026-01-01" --limit 10000 --output /tmp/raw.md
+# 1. 导出消息（默认最近 3 个月，可自定义 --start-time）
+wechat-cli export "群聊名" --format markdown --start-time "2025-01-01" --limit 10000 --output /tmp/raw.md
 
 # 2. 获取 chatroom username
 wechat-cli history "群聊名" --limit 1
@@ -100,6 +108,43 @@ xor_key = uin & 0xFF
 ### wxgf 格式
 
 微信 HEVC 容器，跳过头部找 NAL start code `\x00\x00\x00\x01` 后用 ffmpeg 转 jpg。
+
+## 输出效果
+
+导出后在 Obsidian 中的效果：
+
+- 按日期分节，带星期标注：`## 2026-05-20 周二`
+- 发送者加粗、时间用行内代码：**张三** `09:15` 消息内容
+- 图片独占一行，Obsidian 直接渲染缩略图
+- 引用回复显示被引原文：`> _李四: 原始消息..._`
+- 自动清理：拍了拍、红包、XML 残片、语音提取时长 `[语音 5s]`
+
+## 常见问题
+
+### "Permission denied" 或找不到微信数据目录
+
+终端（Terminal / iTerm / Claude Code）需要 **Full Disk Access**：
+系统设置 → 隐私与安全 → 完全磁盘访问权限 → 添加你的终端应用。
+添加后需要**重启终端**。
+
+### wechat-cli init 失败
+
+确保 Mac 微信已登录并加载了聊天记录。微信 4.0+ 需要先在手机端确认"同步聊天记录到电脑"。
+
+### HMAC 验证失败 / 数据库解密失败
+
+- 如果微信刚更新过版本，密钥可能变了 → 重新运行 `wechat-cli init`
+- message_resource.db 经常 HMAC 不过，脚本会自动跳过它，只要 message_0.db 或 message_1.db 成功即可
+
+### 图片解密失败（少量是正常的）
+
+- 已过期被微信服务器清理的图片，本地只有缩略图 → 无法恢复
+- 极少数 .dat 文件格式不标准 → 脚本会跳过并统计在 "解密失败" 中
+- 实测成功率通常 95%+（如 409 张中 398 张成功）
+
+### wxgf 图片转换失败
+
+wxgf 是微信 HEVC 容器格式，需要 ffmpeg 支持 HEVC 解码。确保 `brew install ffmpeg` 安装的版本包含 libx265。
 
 ## 文件说明
 

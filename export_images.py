@@ -299,6 +299,36 @@ def extract_md5_from_packed_info(blob):
     return None
 
 
+# ========== 前置检查 ==========
+
+def check_prerequisites():
+    """检查运行所需的依赖是否就绪，返回 (ok, errors)"""
+    errors = []
+
+    if subprocess.run(["which", "wechat-cli"], capture_output=True).returncode != 0:
+        errors.append("wechat-cli 未安装 → npm i -g @canghe_ai/wechat-cli")
+
+    if subprocess.run(["which", "ffmpeg"], capture_output=True).returncode != 0:
+        errors.append("ffmpeg 未安装 → brew install ffmpeg（wxgf 图片需要）")
+
+    keys_file = os.path.expanduser("~/.wechat-cli/all_keys.json")
+    if not os.path.exists(keys_file):
+        errors.append("密钥文件不存在 → 先运行 wechat-cli init 提取密钥")
+
+    wechat_base = os.path.expanduser(
+        "~/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files"
+    )
+    if not os.path.isdir(wechat_base):
+        errors.append("微信数据目录不存在 → 确认 Mac 微信已登录且终端有 Full Disk Access")
+
+    try:
+        from Crypto.Cipher import AES  # noqa: F401
+    except ImportError:
+        errors.append("pycryptodome 未安装 → pip3 install pycryptodome")
+
+    return len(errors) == 0, errors
+
+
 # ========== 主流程 ==========
 
 def resolve_wxid_dir():
@@ -326,7 +356,24 @@ def main():
     parser.add_argument("--input", required=True, help="wechat-cli 导出的 markdown 文件")
     parser.add_argument("--username", required=True, help="聊天 username (如 xxx@chatroom)")
     parser.add_argument("--output", required=True, help="输出 markdown 路径")
+    parser.add_argument("--check", action="store_true", help="仅检查前置条件，不执行导出")
     args = parser.parse_args()
+
+    ok, errors = check_prerequisites()
+    if args.check:
+        if ok:
+            print("所有前置条件已满足")
+        else:
+            print("前置条件检查失败：")
+            for e in errors:
+                print(f"  - {e}")
+        sys.exit(0 if ok else 1)
+
+    if not ok:
+        print("前置条件检查失败：", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        sys.exit(1)
 
     wxid_dir = resolve_wxid_dir()
     if not wxid_dir:
