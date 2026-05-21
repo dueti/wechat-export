@@ -29,25 +29,32 @@ brew install sqlcipher ffmpeg
 
 ## 安装
 
+支持 Claude Code 和 Codex，克隆到对应 skills 目录即可自动发现：
+
 ```bash
-# 克隆到 Claude Code skills 目录
+# Claude Code
 git clone https://github.com/dueti/wechat-export.git ~/.claude/skills/wechat-export
+
+# Codex
+git clone https://github.com/dueti/wechat-export.git ~/.codex/skills/wechat-export
 ```
 
 ## 使用
 
-在 Claude Code 中：
+### Claude Code
 
 ```
 /wechat-export 远明AI课堂
 ```
 
-或者直接说"导出微信群聊 XXX 到 Obsidian"，skill 会自动触发。
+### Codex
+
+直接说"导出微信群聊 XXX 到 Obsidian"或"wechat export XXX"，skill 会自动触发。
 
 ### 检查环境
 
 ```bash
-python3 export_images.py --check --input /dev/null --username x --output /dev/null
+python3 scripts/export_images.py --check --input /dev/null --username x --output /dev/null
 ```
 
 会检测 wechat-cli、ffmpeg、pycryptodome、密钥文件、微信数据目录是否就绪。
@@ -63,13 +70,13 @@ wechat-cli history "群聊名" --limit 1
 # 从输出中取 username 字段
 
 # 3. 图片解密 + 嵌入
-python3 export_images.py \
+python3 scripts/export_images.py \
   --input /tmp/raw.md \
   --username "123456789@chatroom" \
   --output ~/obsidian/微信记录/群聊名.md
 
 # 4. 格式化
-python3 format_chat.py \
+python3 scripts/format_chat.py \
   --input ~/obsidian/微信记录/群聊名.md \
   --output ~/obsidian/微信记录/群聊名.md
 ```
@@ -146,13 +153,19 @@ xor_key = uin & 0xFF
 
 wxgf 是微信 HEVC 容器格式，需要 ffmpeg 支持 HEVC 解码。确保 `brew install ffmpeg` 安装的版本包含 libx265。
 
-## 文件说明
+## 目录结构
 
-| 文件 | 说明 |
-|------|------|
-| `SKILL.md` | Claude Code skill 定义 |
-| `export_images.py` | 图片解密主脚本：DB 解密 → MD5 映射 → .dat 解密 → markdown 嵌入 |
-| `format_chat.py` | markdown 格式化：日期分节、清理噪音、Obsidian 排版 |
+```
+wechat-export/
+├── SKILL.md                      # Skill 定义（Claude Code + Codex 通用）
+├── agents/
+│   └── openai.yaml               # Codex UI 元数据
+├── scripts/
+│   ├── export_images.py          # 图片解密：DB 解密 → MD5 映射 → .dat 解密 → markdown 嵌入
+│   └── format_chat.py            # markdown 格式化：日期分节、清理噪音、Obsidian 排版
+├── README.md
+└── LICENSE
+```
 
 ## 致谢
 

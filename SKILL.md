@@ -1,14 +1,18 @@
 ---
 name: wechat-export
-description: 导出微信群聊/私聊记录到 Obsidian，含图片解密和排版。当用户要求导出微信聊天记录、归档微信群聊、或提到"微信导出"时触发。
+description: 导出 Mac 微信群聊/私聊记录到 Obsidian，含图片解密和排版。当用户要求导出微信聊天记录、归档微信群聊、或提到"微信导出""wechat export"时触发。仅支持 macOS + Mac 微信 4.0+。
 arguments: [chat_name]
 argument-hint: [群聊或联系人名称]
 allowed-tools: Bash Read Write Edit Glob Grep
+metadata:
+  short-description: 导出微信聊天到 Obsidian
 ---
 
 # wechat-export
 
 将微信聊天记录导出为格式化的 Obsidian markdown，包含图片解密。
+
+> `<skill_dir>` 指本 skill 所在目录。Claude Code 下通常为 `~/.claude/skills/wechat-export`，Codex 下为 `~/.codex/skills/wechat-export`。执行前先确认实际路径。
 
 ## 前置条件
 
@@ -48,7 +52,7 @@ wechat-cli history "$chat_name" --limit 1
 调用图片处理脚本：
 
 ```bash
-python3 ~/.claude/skills/wechat-export/export_images.py \
+python3 <skill_dir>/scripts/export_images.py \
   --input /tmp/wechat_export_raw.md \
   --username "<上一步取到的 username>" \
   --output "<obsidian 输出路径>"
@@ -66,7 +70,7 @@ python3 ~/.claude/skills/wechat-export/export_images.py \
 调用格式化脚本：
 
 ```bash
-python3 ~/.claude/skills/wechat-export/format_chat.py \
+python3 <skill_dir>/scripts/format_chat.py \
   --input "<上一步输出的 markdown>" \
   --output "<最终输出路径>"
 ```

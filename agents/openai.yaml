@@ -1,0 +1,3 @@
+display_name: WeChat Export
+short_description: 导出 Mac 微信聊天到 Obsidian（含图片解密）
+default_prompt: 导出微信群聊到 Obsidian
