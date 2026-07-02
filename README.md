@@ -1,177 +1,122 @@
-# wechat-export
+# 微信聊天导出工具（wechat-export）
 
-Claude Code skill：导出 **Mac 微信** 聊天记录到 Obsidian，含图片解密和排版。仅支持 macOS。
+把 Mac 微信的群聊 / 私聊记录导出成排版好的 markdown 文件，聊天里的图片会自动还原。
+全程只读你电脑上的微信本地数据，微信不用挂在线，也不上传任何数据到网上。
 
-## 功能
+> 只支持 **macOS + Mac 微信 4.0 及以上**。Windows / 手机微信用不了。
 
-- 通过 [wechat-cli](https://www.npmjs.com/package/@canghe_ai/wechat-cli) 导出聊天记录
-- 自动解密 Mac 微信 4.0+ 的加密图片（V2 格式：AES-128-ECB + XOR）
-- 密钥自动从 kvcomm 缓存推导，无需手动配置
-- wxgf（微信 HEVC 容器）自动转 jpg
-- 输出 Obsidian 友好的 markdown：按日期分节、图片嵌入、引用格式化、噪音清理
+---
 
-## 前置条件
+## 一、这是什么
 
-```bash
-# wechat-cli
-npm i -g @canghe_ai/wechat-cli
-wechat-cli init  # 提取数据库密钥
+- 输入：一个群聊或联系人的名字
+- 输出：一个 `.md` 文件（按天分段、显示发送人和时间、图片内嵌），可以直接丢进 Obsidian，也可以当普通文档看
 
-# Python 依赖
-pip3 install pycryptodome
+---
 
-# 系统工具
-brew install sqlcipher ffmpeg
-```
+## 二、安装（一次性，约 10 分钟）
 
-- macOS 终端需要 **Full Disk Access**（系统设置 → 隐私与安全 → 完全磁盘访问权限）
-- 微信聊天记录需要已同步到 Mac（手机端迁移或 Mac 端登录后自动同步）
+### 1. 放好 skill 文件夹
 
-## 安装
+把整个 `wechat-export` 文件夹放到下面任一位置：
 
-支持 Claude Code 和 Codex，克隆到对应 skills 目录即可自动发现：
+- 用 **Claude Code**：`~/.claude/skills/wechat-export`
+- 用 **Codex**：`~/.codex/skills/wechat-export`
 
-```bash
-# Claude Code
-git clone https://github.com/dueti/wechat-export.git ~/.claude/skills/wechat-export
+（下文把这个路径记作 `<skill>`。）
 
-# Codex
-git clone https://github.com/dueti/wechat-export.git ~/.codex/skills/wechat-export
-```
+### 2. 装几个基础工具
 
-## 使用
+需要这几样，缺哪个装哪个：
 
-### Claude Code
+- **Node.js** —— 去 https://nodejs.org 下载安装（用来跑 wechat-cli）
+- **Homebrew** —— 去 https://brew.sh 按提示装（用来装 ffmpeg，只有导图片才需要）
+- **Python 3** —— macOS 一般自带，命令行输 `python3 --version` 有版本号就行
 
-```
-/wechat-export 远明AI课堂
-```
+### 3. 给终端「完全磁盘访问权限」
 
-### Codex
+这是最容易漏的一步。微信数据受系统保护，必须授权：
 
-直接说"导出微信群聊 XXX 到 Obsidian"或"wechat export XXX"，skill 会自动触发。
+1. 打开 **系统设置 → 隐私与安全性 → 完全磁盘访问权限**
+2. 找到你平时用的终端（Terminal 或 iTerm 或 VS Code），打开它的开关
+3. **完全退出该终端再重新打开**（很重要，不重开权限不生效）
 
-### 检查环境
+### 4. 登录一次 Mac 微信
+
+打开电脑版微信登录一次，让它把聊天数据同步到本地。之后导出时微信可以关掉。
+
+### 5. 一键体检 + 自动补齐
+
+打开终端，运行：
 
 ```bash
-python3 scripts/export_images.py --check --input /dev/null --username x --output /dev/null
+python3 <skill>/scripts/doctor.py --fix
 ```
 
-会检测 wechat-cli、ffmpeg、pycryptodome、密钥文件、微信数据目录是否就绪。
+它会自动帮你装好 wechat-cli、Python 加密库、ffmpeg，并提取密钥。
+凡是它自己搞不定的（比如权限、登录微信），会打印出**具体怎么做**。
+看到「环境就绪」就说明配好了。
 
-### 手动使用脚本
+---
+
+## 三、使用
+
+配好后，导出一个聊天只要一条命令：
 
 ```bash
-# 1. 导出消息（默认最近 3 个月，可自定义 --start-time）
-wechat-cli export "群聊名" --format markdown --start-time "2025-01-01" --limit 10000 --output /tmp/raw.md
-
-# 2. 获取 chatroom username
-wechat-cli history "群聊名" --limit 1
-# 从输出中取 username 字段
-
-# 3. 图片解密 + 嵌入
-python3 scripts/export_images.py \
-  --input /tmp/raw.md \
-  --username "123456789@chatroom" \
-  --output ~/obsidian/微信记录/群聊名.md
-
-# 4. 格式化
-python3 scripts/format_chat.py \
-  --input ~/obsidian/微信记录/群聊名.md \
-  --output ~/obsidian/微信记录/群聊名.md
+python3 <skill>/scripts/wechat_export.py "群聊或联系人名字"
 ```
 
-## 技术细节
+几个例子：
 
-### 图片映射链
+```bash
+# 最近 3 个月（默认）
+python3 <skill>/scripts/wechat_export.py "老同学群"
 
-```
-message_0.db → Msg_{md5(username)} 表 → local_type=3
-  → packed_info_data (protobuf) → 扫描 32 字节 hex → 文件 MD5
-  → attach/{md5(username)}/{YYYY-MM}/Img/{md5}[_h|_t].dat
-  → V2 解密 (AES-128-ECB + XOR)
-```
+# 指定时间段
+python3 <skill>/scripts/wechat_export.py "老同学群" --since 2026-01-01 --until 2026-03-31
 
-### 数据库解密
+# 全部历史
+python3 <skill>/scripts/wechat_export.py "老同学群" --all
 
-Mac 微信 4.0+ 的 message_*.db 使用 SQLCipher 4 自定义参数（AES-256-CBC, HMAC-SHA512, reserve=80），不能用 sqlcipher CLI 直接打开，需逐页解密。
-
-### 图片密钥
-
-从 `~/Library/.../app_data/net/kvcomm/key_<uin>_*.statistic` 文件名提取 uin：
-
-```
-aes_key = MD5(str(uin) + wxid)[:16]
-xor_key = uin & 0xFF
+# 指定导出到哪
+python3 <skill>/scripts/wechat_export.py "老同学群" --out ~/Desktop/我的导出
 ```
 
-### V2 图片格式
+> 名字要和微信里显示的**完全一样**。记不清就先运行 `wechat-cli sessions --limit 30` 看最近会话列表。
 
-```
-[6B 签名: 07 08 V2 08 07] [4B aes_size LE] [4B xor_size LE] [1B padding]
-[AES-ECB 加密段] [明文段] [XOR 加密段]
-```
+导出的文件默认放在：
+1. 你 `--out` 指定的目录，否则
+2. 检测到的 Obsidian 仓库下的「微信记录」文件夹，否则
+3. 桌面的「微信导出」文件夹
 
-### wxgf 格式
+---
 
-微信 HEVC 容器，跳过头部找 NAL start code `\x00\x00\x00\x01` 后用 ffmpeg 转 jpg。
+## 四、如果你用 Claude Code / Codex
 
-## 输出效果
+不用记命令。直接对助手说：
 
-导出后在 Obsidian 中的效果：
+> 帮我导出微信「老同学群」最近三个月的记录
 
-- 按日期分节，带星期标注：`## 2026-05-20 周二`
-- 发送者加粗、时间用行内代码：**张三** `09:15` 消息内容
-- 图片独占一行，Obsidian 直接渲染缩略图
-- 引用回复显示被引原文：`> _李四: 原始消息..._`
-- 自动清理：拍了拍、红包、XML 残片、语音提取时长 `[语音 5s]`
+助手会自己跑体检和导出。第一次它可能会提示你去做权限授权、登录微信这类只能人工完成的步骤。
 
-## 常见问题
+---
 
-### "Permission denied" 或找不到微信数据目录
+## 五、出问题了看这里
 
-终端（Terminal / iTerm / Claude Code）需要 **Full Disk Access**：
-系统设置 → 隐私与安全 → 完全磁盘访问权限 → 添加你的终端应用。
-添加后需要**重启终端**。
+| 现象 | 怎么办 |
+| --- | --- |
+| 提示读不到微信目录 / Permission | 完全磁盘访问权限没配好，重看第二步第 3 点，授权后**重开终端** |
+| 找不到账号 | 电脑版微信登录一次 |
+| 提示密钥不存在 | 跑 `python3 <skill>/scripts/doctor.py --fix` |
+| 图片显示不出来 | 图片文件在成品旁边的 `img/` 文件夹里，用 Obsidian 打开能正常显示 |
+| 某类图片（wxgf）缺失 | 装一下 ffmpeg：`brew install ffmpeg` |
+| 找不到某个群 | 名字对不上，用 `wechat-cli sessions` 查准确名字 |
 
-### wechat-cli init 失败
+---
 
-确保 Mac 微信已登录并加载了聊天记录。微信 4.0+ 需要先在手机端确认"同步聊天记录到电脑"。
+## 六、隐私说明
 
-### HMAC 验证失败 / 数据库解密失败
-
-- 如果微信刚更新过版本，密钥可能变了 → 重新运行 `wechat-cli init`
-- message_resource.db 经常 HMAC 不过，脚本会自动跳过它，只要 message_0.db 或 message_1.db 成功即可
-
-### 图片解密失败（少量是正常的）
-
-- 已过期被微信服务器清理的图片，本地只有缩略图 → 无法恢复
-- 极少数 .dat 文件格式不标准 → 脚本会跳过并统计在 "解密失败" 中
-- 实测成功率通常 95%+（如 409 张中 398 张成功）
-
-### wxgf 图片转换失败
-
-wxgf 是微信 HEVC 容器格式，需要 ffmpeg 支持 HEVC 解码。确保 `brew install ffmpeg` 安装的版本包含 libx265。
-
-## 目录结构
-
-```
-wechat-export/
-├── SKILL.md                      # Skill 定义（Claude Code + Codex 通用）
-├── agents/
-│   └── openai.yaml               # Codex UI 元数据
-├── scripts/
-│   ├── export_images.py          # 图片解密：DB 解密 → MD5 映射 → .dat 解密 → markdown 嵌入
-│   └── format_chat.py            # markdown 格式化：日期分节、清理噪音、Obsidian 排版
-├── README.md
-└── LICENSE
-```
-
-## 致谢
-
-- [wechat-cli](https://www.npmjs.com/package/@canghe_ai/wechat-cli) - 微信消息导出
-- [ylytdeng/wechat-decrypt](https://github.com/ylytdeng/wechat-decrypt) - 图片密钥推导算法参考
-
-## License
-
-MIT
+- 所有处理都在你自己电脑本地完成，不联网、不上传。
+- 密钥保存在你本机 `~/.wechat-cli/`，导出的聊天记录只写到你指定的文件夹。
+- 分享导出文件前请自行注意里面的隐私内容。

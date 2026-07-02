@@ -1,5 +1,12 @@
+# Python
 __pycache__/
-*.pyc
-*.db
-*.h265
+*.py[cod]
+*.egg-info/
+
+# macOS
 .DS_Store
+
+# 本地导出产物（不应进仓库）
+*.raw.md
+*.img.md
+/img/
