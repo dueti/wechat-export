@@ -25,7 +25,7 @@ python3 <skill_dir>/scripts/doctor.py --fix    # 检查 + 自动装能自动装�
 
 体检通过再往下走。它把「能自动装的」和「只能你手动做的」分开了：
 
-- **能自动装**（加 `--fix`）：pycryptodome、wechat-cli（需已装 Node）、ffmpeg（需已装 Homebrew）、`wechat-cli init` 提取密钥
+- **能自动装**（加 `--fix`）：pycryptodome、libzstd（`brew install zstd`，多分片消息解压用）、wechat-cli（需已装 Node）、ffmpeg（需已装 Homebrew）、`wechat-cli init` 提取密钥
 - **只能手动做**：
   1. 给终端授权 **完全磁盘访问权限**：系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 打开你用的终端（Terminal / iTerm / VS Code），然后**完全退出终端再重开**
   2. 装并**登录一次 Mac 微信**（4.0+）
@@ -65,20 +65,28 @@ python3 <skill_dir>/scripts/wechat_export.py "AI交流群" --out ~/Desktop/导�
 
 ## 第 2 步（可选）：分步执行
 
-一键脚本内部就是下面三步，需要单独调试某一步时用：
+一键脚本内部就是下面几步，需要单独调试某一步时用：
 
 ```bash
-# a. 导出原始 markdown
-wechat-cli export "群名" --format markdown --start-time 2026-01-01 --limit 20000 --output /tmp/raw.md
-# b. 拿 username（取 JSON 里的 username 字段，如 123@chatroom）
+# a. 拿 username（取 JSON 里的 username 字段，如 123@chatroom）
 wechat-cli history "群名" --limit 1
+# b. 导出原始 markdown —— 走多分片读取器（见下方说明）
+python3 <skill_dir>/scripts/shard_reader.py "群名" --username "123@chatroom" \
+    --start-time 2026-01-01 --limit 20000 --output /tmp/raw.md
 # c. 图片解密
 python3 <skill_dir>/scripts/export_images.py --input /tmp/raw.md --username "123@chatroom" --output /tmp/withimg.md
 # d. 格式化
 python3 <skill_dir>/scripts/format_chat.py --input /tmp/withimg.md --output ~/out/群名.md --title "群名"
 ```
 
-格式化规则：按日期分节、`**发送者** 时间`、图片独占一行、引用回复用 `> _被引用者: 原文_`、清理拍了拍/红包/XML 残片、语音视频保留时长。
+> **为什么第 b 步不用 `wechat-cli export`**：微信 4.0 会把消息轮换存进多个加密分片
+> （`message_0.db` / `message_1.db` / `message_2.db` …），wechat-cli 0.2.4 只读第一个分片，
+> 一旦发生轮换就读不到新分片里的近期消息（表现为"只导出到某个日期之前"）。`shard_reader.py`
+> 用纯 Python 解密并合并全部分片（zstd 走 ctypes 绑定系统 libzstd，需 `brew install zstd`），
+> 输出与 wechat-cli 完全一致的 markdown。username 解析仍用 wechat-cli（老群/私聊在旧分片里也在）；
+> 仅当某聊天**只**存在于新分片（轮换后才首次出现）时 wechat-cli 解析不出 username，需手动指定。
+
+格式化规则：按日期分节、`**发送者** 时间`、图片独占一行、引用回复用 `> _被引用者: 原文_`、清理拍了拍/红包/XML 残片、位置和联系人卡片转为可读文字、语音视频保留时长。
 
 ## 常见报错对照
 
@@ -89,6 +97,8 @@ python3 <skill_dir>/scripts/format_chat.py --input /tmp/withimg.md --output ~/ou
 | 密钥文件不存在 | 没跑 init | `wechat-cli init` 或 `doctor.py --fix` |
 | 图片全部「无文件」 | username 传错 | 用 `history --limit 1` 重新确认 |
 | wxgf 图片解密失败 | 缺 ffmpeg | `brew install ffmpeg`（只影响这类图） |
+| 只导出到某个日期之前 / 近期消息缺失 | 微信轮换出新分片，旧路径读不到 | 已由 `shard_reader.py` 修复；确认 `doctor.py` 里 libzstd 为 ✓ |
+| 压缩消息（图片/引用/长文本）丢失 | 缺 libzstd | `brew install zstd` |
 | 查不到聊天 | 名称对不上 | `wechat-cli sessions` / `contacts` 查准确名字 |
 
 ## 技术参考（排障用）
@@ -96,13 +106,15 @@ python3 <skill_dir>/scripts/format_chat.py --input /tmp/withimg.md --output ~/ou
 图片映射链（不要用 hardlink.db 的 _rowid_）：
 
 ```
-message_0.db → Msg_{md5(username)} 表 → local_type=3 的行
+message_*.db → Msg_{md5(username)} 表 → local_type=3 的行
+  → 用 local_id + create_time 区分轮换库中的重复编号
   → packed_info_data (protobuf blob) 扫 32 字节 hex → 文件 MD5
   → attach/{md5(username)}/{YYYY-MM}/Img/{md5}[_h|_t].dat
   → V2 解密 (AES-128-ECB + XOR)
 ```
 
 - **数据库解密**：message_*.db 是 SQLCipher 4 自定义参数，不能用 sqlcipher CLI 直接开，脚本用 Python 逐页解密（AES-256-CBC / HMAC-SHA512 / reserve=80 / page=4096）。密钥在 `~/.wechat-cli/all_keys.json`。
+- **数据库轮换**：微信会新增 `message_N.db`，而且 `local_id` 会重新从小号开始。脚本扫描全部数字编号库，只接受同一分钟内的唯一候选；图片按内容 MD5 命名，避免跨库或跨聊天覆盖。
 - **图片密钥**（与库密钥不同）：从 `app_data/net/kvcomm/key_<uin>_*.statistic` 推导，`aes_key = MD5(str(uin)+wxid)[:16]`，`xor_key = uin & 0xFF`。`export_images.py` 的 `find_image_keys()` 自动推导，无需手配。
 - **wxgf**：微信 HEVC 容器，跳到 NAL start code `\x00\x00\x00\x01` 后用 ffmpeg 转 jpg。
 - 多 wxid 目录时取 `~/.wechat-cli/config.json` 的 `db_dir` 对应那个。

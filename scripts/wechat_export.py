@@ -105,20 +105,21 @@ def main():
     withimg = os.path.join(out_dir, f".{name}.img.md")   # 图片替换后
     final = os.path.join(out_dir, f"{name}.md")          # 最终成品
 
-    # 1) 导出原始 markdown
-    print(f"[1/4] 导出「{args.chat}」（{since} 起）...")
-    cmd = ["wechat-cli", "export", args.chat, "--format", "markdown",
-           "--start-time", since, "--limit", args.limit, "--output", raw]
+    # 1) 定位 username（wechat-cli 仍可解析，群/私聊在老库里也存在）
+    print("[1/4] 定位聊天 username ...")
+    username = get_username(args.chat)
+    print(f"      username = {username}")
+
+    # 2) 导出原始 markdown —— 走多分片读取器（wechat-cli 0.2.4 读不到 message_2+ 新分片）
+    print(f"[2/4] 导出「{args.chat}」（{since} 起，多分片）...")
+    cmd = [sys.executable, os.path.join(SCRIPT_DIR, "shard_reader.py"), args.chat,
+           "--username", username, "--start-time", since,
+           "--limit", str(args.limit), "--output", raw]
     if args.until:
         cmd += ["--end-time", args.until]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.exists(raw):
         die(f"导出失败：{(r.stderr or r.stdout).strip()[:300]}")
-
-    # 2) 拿 username
-    print("[2/4] 定位聊天 username ...")
-    username = get_username(args.chat)
-    print(f"      username = {username}")
 
     # 3) 图片解密
     print("[3/4] 解密图片 ...")

@@ -12,6 +12,7 @@
   python3 format_chat.py --input raw.md --output formatted.md [--title "群聊名"]
 """
 import argparse
+import html
 import os
 import re
 import sys
@@ -103,6 +104,8 @@ def filter_messages(messages):
         # 跳过红包
         if "[链接/文件] 微信红包" in c:
             continue
+        if "_wc_custom_link_" in c and "红包" in c:
+            continue
 
         # 清理回复中的 XML
         if msg["reply_to"]:
@@ -122,6 +125,24 @@ def filter_messages(messages):
         vm = re.search(r"\[视频\]\s*<\?xml.*?playlength=\"(\d+)\"", c, re.DOTALL)
         if vm:
             msg["content"] = f"[视频 {int(vm.group(1))}s]"
+
+        # 企业微信联系人卡片只保留昵称，去掉头像 URL 等 XML 属性。
+        contact = re.search(r'^\[type=66\]\s*<\?xml.*?\bnickname="([^"]*)"', c, re.DOTALL)
+        if contact:
+            msg["content"] = f"[联系人] {html.unescape(contact.group(1))}"
+
+        # 位置消息保留可读地址和地点名。
+        location = re.search(r"\[位置\]\s*<msg>.*?<location\b([^>]*)", c, re.DOTALL)
+        if location:
+            attrs = location.group(1)
+            parts = []
+            for attr in ("label", "poiname"):
+                value = re.search(rf'\b{attr}="([^"]*)"', attrs)
+                if value:
+                    text = html.unescape(value.group(1)).strip()
+                    if text and text not in parts:
+                        parts.append(text)
+            msg["content"] = "[位置]" + (" " + " · ".join(parts) if parts else "")
 
         # 清理正文中 XML 引用残片
         if "wxid_" in c and "<?xml" in c:

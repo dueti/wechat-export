@@ -66,6 +66,28 @@ def check_ffmpeg(fix):
     return False, "ffmpeg 未安装", "brew install ffmpeg（wxgf 格式图片需要，缺了只影响这类图）"
 
 
+def check_libzstd(fix):
+    """多分片读取器用 ctypes 绑定 libzstd 解压消息；缺了压缩消息(图片/引用/长文本)会丢。"""
+    import ctypes, ctypes.util
+    cands = ["/opt/homebrew/lib/libzstd.dylib", "/opt/homebrew/lib/libzstd.1.dylib",
+             "/usr/local/lib/libzstd.dylib", "/usr/lib/libzstd.dylib",
+             ctypes.util.find_library("zstd"), "libzstd.dylib"]
+    for c in cands:
+        if not c:
+            continue
+        try:
+            ctypes.CDLL(c)
+            return True, "libzstd 可用", None
+        except OSError:
+            continue
+    if fix and has("brew"):
+        print("  brew install zstd ...")
+        r = run(["brew", "install", "zstd"])
+        if r.returncode == 0:
+            return True, "libzstd 已安装", None
+    return False, "libzstd 缺失", "brew install zstd（多分片读取需要，缺了压缩消息会丢：图片/引用/长文本）"
+
+
 def check_node_cli(fix):
     if has("wechat-cli"):
         r = run(["wechat-cli", "--version"])
@@ -137,6 +159,7 @@ def main():
     steps = [
         ("运行平台", lambda: check_platform()),
         ("Python 加密库", lambda: check_python_crypto(args.fix)),
+        ("libzstd 解压库", lambda: check_libzstd(args.fix)),
         ("ffmpeg", lambda: check_ffmpeg(args.fix)),
         ("wechat-cli", lambda: check_node_cli(args.fix)),
         ("磁盘访问权限", lambda: check_full_disk_access()),
@@ -156,12 +179,13 @@ def main():
                 print(f"      → {hint}")
             warnings.append(name)
         else:
-            # ffmpeg 只影响 wxgf 图片，算警告不算阻塞
-            mark = WARN if name == "ffmpeg" else BAD
+            # ffmpeg 只影响 wxgf 图片；libzstd 缺失会丢压缩消息但纯文本仍可导——都算警告不阻塞
+            soft = name in ("ffmpeg", "libzstd 解压库")
+            mark = WARN if soft else BAD
             print(f"  {mark} {name}: {msg}")
             if hint:
                 print(f"      → {hint}")
-            (warnings if name == "ffmpeg" else blocking).append(name)
+            (warnings if soft else blocking).append(name)
 
     print()
     if not blocking:
