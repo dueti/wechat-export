@@ -37,16 +37,16 @@ def parse_messages(body):
 
         date, time, rest = m.group(1), m.group(2), m.group(3)
 
-        # 收集续行
+        # 收集续行；消息正文内部可能含空行，只有下一条消息或引用行才终止
         content_lines = [rest]
         while i + 1 < len(lines):
             next_line = lines[i + 1]
             if next_line.startswith("- [") or next_line.strip().startswith("↳"):
                 break
-            if not next_line.strip():
-                break
             content_lines.append(next_line)
             i += 1
+        while len(content_lines) > 1 and not content_lines[-1].strip():
+            content_lines.pop()
 
         # 收集回复行
         reply_to = None
@@ -196,8 +196,9 @@ def render_markdown(messages, title=None):
             out.append(f"{content.strip()}\n")
         elif sender:
             reply_prefix = f" > _{msg['reply_to']}_" if msg["reply_to"] else ""
-            content_flat = content.replace("\n", " ") if "\n" in content else content
-            out.append(f"**{sender}** `{time}`{reply_prefix}  \n{content_flat}\n")
+            # 保留正文换行（含段落空行），用 markdown 硬换行避免多行被吞成段落
+            content_block = re.sub(r"\n{3,}", "\n\n", content).replace("\n", "  \n")
+            out.append(f"**{sender}** `{time}`{reply_prefix}  \n{content_block}\n")
         else:
             out.append(f"_{content}_ `{time}`\n")
 
