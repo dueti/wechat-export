@@ -83,6 +83,8 @@ python3 <skill>/scripts/wechat_export.py "老同学群" --all
 python3 <skill>/scripts/wechat_export.py "老同学群" --out ~/Desktop/我的导出
 ```
 
+> 电脑时区不是北京时间的，命令前加 `TZ=Asia/Shanghai`，不然时间会偏。
+
 > 名字要和微信里显示的**完全一样**。记不清就先运行 `wechat-cli sessions --limit 30` 看最近会话列表。
 
 导出的文件默认放在：
@@ -112,6 +114,7 @@ python3 <skill>/scripts/wechat_export.py "老同学群" --out ~/Desktop/我的�
 | 图片显示不出来 | 图片文件在成品旁边的 `img/` 文件夹里，用 Obsidian 打开能正常显示 |
 | 某类图片（wxgf）缺失 | 装一下 ffmpeg：`brew install ffmpeg` |
 | 找不到某个群 | 名字对不上，用 `wechat-cli sessions` 查准确名字 |
+| 时间差了几小时 | 电脑时区不是北京时间，命令前加 `TZ=Asia/Shanghai` |
 
 ---
 

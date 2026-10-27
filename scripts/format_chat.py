@@ -96,13 +96,14 @@ def filter_messages(messages):
     for msg in messages:
         c = msg["content"]
         # 跳过拍了拍
-        if "[链接/文件]" in c and "拍了拍" in c:
+        # 分片读取器把拍一拍标成 [应用消息]，wechat-cli 旧版标 [链接/文件]，两种都跳过
+        if "拍了拍" in c and ("[链接/文件]" in c or "[应用消息]" in c):
             continue
         # 跳过系统 XML
         if c.startswith("[系统] <?xml"):
             continue
         # 跳过红包
-        if "[链接/文件] 微信红包" in c:
+        if "[链接/文件] 微信红包" in c or "[应用消息] 微信红包" in c:
             continue
         if "_wc_custom_link_" in c and "红包" in c:
             continue

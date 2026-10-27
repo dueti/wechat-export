@@ -50,7 +50,15 @@ python3 <skill_dir>/scripts/wechat_export.py "AI交流群" --all
 python3 <skill_dir>/scripts/wechat_export.py "AI交流群" --out ~/Desktop/导出
 ```
 
-不加 `--since` 默认最近 90 天。**聊天名称必须和微信里显示的完全一致**，不确定就先 `wechat-cli sessions --limit 30` 或 `wechat-cli contacts --query "关键词"` 查。
+不加 `--since` 默认最近 90 天。
+
+消息时间和日期分界跟**系统时区**走。电脑时区不是北京时间（比如人在海外）就在命令前加 `TZ=Asia/Shanghai`，否则每条时间会偏移、跨零点的消息会串到相邻一天：
+
+```bash
+TZ=Asia/Shanghai python3 <skill_dir>/scripts/wechat_export.py "AI交流群" --since 2026-10-20 --until 2026-10-26
+```
+
+**聊天名称必须和微信里显示的完全一致**，不确定就先 `wechat-cli sessions --limit 30` 或 `wechat-cli contacts --query "关键词"` 查。
 
 ### 输出去哪
 
@@ -100,6 +108,8 @@ python3 <skill_dir>/scripts/format_chat.py --input /tmp/withimg.md --output ~/ou
 | 只导出到某个日期之前 / 近期消息缺失 | 微信轮换出新分片，旧路径读不到 | 已由 `shard_reader.py` 修复；确认 `doctor.py` 里 libzstd 为 ✓ |
 | 压缩消息（图片/引用/长文本）丢失 | 缺 libzstd | `brew install zstd` |
 | 查不到聊天 | 名称对不上 | `wechat-cli sessions` / `contacts` 查准确名字 |
+| 时间差了几小时 / 消息跑到相邻一天 | 系统时区不是北京时间 | 命令前加 `TZ=Asia/Shanghai` |
+| 体检提示某个 `message_N.db` 没有密钥 | init 之后微信又轮换出了新分片 | 只在确认缺内容时跑 `wechat-cli init --force`（会给微信重签名） |
 
 ## 技术参考（排障用）
 

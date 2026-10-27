@@ -12,6 +12,7 @@ wechat-export 环境体检 + 自动修复。
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -130,12 +131,37 @@ def check_wechat_logged_in():
     return True, f"检测到 {len(wxids)} 个账号目录", None
 
 
+def shards_without_key(keys):
+    """微信会轮换出 message_N.db 新分片，init 之后新增的分片没有密钥，导出会静默漏掉。"""
+    try:
+        with open(CONFIG_FILE) as f:
+            db_dir = json.load(f).get("db_dir", "")
+    except (json.JSONDecodeError, OSError):
+        return []
+    msg_dir = os.path.join(db_dir, "message")
+    if not os.path.isdir(msg_dir):
+        return []
+    known = {os.path.basename(k) for k in keys}
+    missing = []
+    for name in sorted(os.listdir(msg_dir)):
+        if re.fullmatch(r"message_\d+\.db", name) and name not in known:
+            missing.append(name)
+    return missing
+
+
 def check_keys(fix):
     if os.path.exists(KEYS_FILE) and os.path.exists(CONFIG_FILE):
         try:
             with open(KEYS_FILE) as f:
                 keys = json.load(f)
             if keys:
+                missing = shards_without_key(keys)
+                if missing:
+                    return None, f"密钥已提取（{len(keys)} 个库），但 {', '.join(missing)} 没有密钥", (
+                        "这些分片里的消息会导不出来（只影响存在其中的聊天）。"
+                        "`wechat-cli init --force` 可重新提取；它会给微信重签名，"
+                        "新版微信可能提取失败或触发系统权限重新授权，先确认确实缺内容再跑"
+                    )
                 return True, f"密钥已提取（{len(keys)} 个库）", None
         except (json.JSONDecodeError, OSError):
             pass
@@ -191,7 +217,7 @@ def main():
     if not blocking:
         print(f"{OK} 环境就绪，可以导出了。")
         if warnings:
-            print(f"{WARN} 次要提醒：{', '.join(warnings)}（不影响文字导出）")
+            print(f"{WARN} 次要提醒：{', '.join(warnings)}（见上面各项的说明）")
         print('\n下一步：python3 wechat_export.py "群聊或联系人名称"')
         sys.exit(0)
     else:
