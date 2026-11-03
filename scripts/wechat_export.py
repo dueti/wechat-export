@@ -84,6 +84,8 @@ def main():
     ap.add_argument("--all", action="store_true", help="导出全部历史")
     ap.add_argument("--out", help="输出目录（覆盖自动探测）")
     ap.add_argument("--limit", default="20000", help="最大条数（默认 20000）")
+    ap.add_argument("--no-voice-backfill", action="store_true",
+                    help="跳过语音转文字回填（默认：输出目录下有「语音整理/」就自动回填）")
     args = ap.parse_args()
 
     if not subprocess.run(["which", "wechat-cli"], capture_output=True).returncode == 0:
@@ -147,6 +149,12 @@ def main():
             os.remove(tmp)
         except OSError:
             pass
+
+    # 5) 语音转文字回填（可选）：人工整理的「语音整理/」是权威源，导出会把 [语音] 占位冲掉，这里注回去
+    voice_dir = os.path.join(out_dir, "语音整理")
+    if not args.no_voice_backfill and os.path.isdir(voice_dir):
+        print("[5/5] 回填语音转文字（语音整理/）...")
+        subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "voice_backfill.py"), out_dir], text=True)
 
     print(f"\n完成 → {final}")
     print(f"图片目录 → {os.path.join(out_dir, 'img')}")
